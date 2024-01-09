@@ -1,0 +1,53 @@
+html, body {
+	width: 100%;
+	height: 100%;
+  	margin: 0;
+  	padding: 0;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+
+html {	
+	flex-direction: column;
+}
+
+body {
+	flex-direction: row;
+	overflow: hidden;
+  touch-action: none;
+	background: black;
+}
+canvas#sketch2 {
+  padding-left: 0;
+  padding-right: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin:0px;
+  width: 60vw !important; 
+  height: auto !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  display: flex;
+}
+
+canvas, video {
+  padding-left: 0;
+  padding-right: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 0;
+  margin-bottom: 0;
+  width: auto !important; 
+  height: 80vh !important;
+  display: block;
+}
+.text {
+  text-align: center;
+}
+
+input {
+  box-shadow: 10px;
+}
