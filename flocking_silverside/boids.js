@@ -28,7 +28,7 @@ Flock.prototype.addBoid = function(b) {
 // Boid class
 // Methods for Separation, Cohesion, Alignment added
 
-function Boid(x, y) {
+function Boid(x, y, color) {
   this.acceleration = createVector(0, 0);
   this.velocity = createVector(0, 0);
   this.position = createVector(x, y);
@@ -37,6 +37,16 @@ function Boid(x, y) {
   this.maxforce = 0.05; // Maximum steering force
 
   this.starting_position = createVector(x, y);
+
+  this.rotation = this.velocity.heading() + radians(180);
+
+  this.transition = false;
+
+  this.counter = 0.0;
+
+  this.color = random([0, 1, 2, 2, 2, 2, 2, 3]);
+
+  this.realCol = color;
 }
 
 Boid.prototype.run = function(boids, render) {
@@ -44,12 +54,26 @@ Boid.prototype.run = function(boids, render) {
     this.flock(boids);
     this.update();
    // this.borders();
+   if (this.transition) {
+    this.rotation = lerp(radians(180), this.velocity.heading() + radians(180), this.counter);
+
+    this.counter += 0.05;
+
+    if (this.counter > .98) {
+        this.transition = false;
+    }
+   } else {
+    this.rotation = this.velocity.heading() + radians(180);
+   }
+
+   
    this.render();
   } else {
     this.arrive(this.starting_position);
+    this.rotation = lerp(this.rotation, radians(180), 0.02);
     this.update();
     this.render();
-  }
+  } 
 }
 
 Boid.prototype.applyForce = function(force) {
@@ -63,12 +87,12 @@ Boid.prototype.flock = function(boids) {
   let ali = this.align(boids);      // Alignment
   let coh = this.cohesion(boids);   // Cohesion
 
-  let sek = this.seek(createVector(mouseX, mouseY));
+  let sek = this.seek(targetPosition);
   // Arbitrarily weight these forces
   sep.mult(2.0);
   ali.mult(1.0);
   coh.mult(1.2);
-  sek.mult(1.0);
+  sek.mult(targetSeek);
   // Add the force vectors to acceleration
   this.applyForce(sep);
   this.applyForce(ali);
@@ -102,13 +126,20 @@ Boid.prototype.seek = function(target) {
 
 Boid.prototype.render = function() {
   // Draw a triangle rotated in the direction of velocity
-  let theta = this.velocity.heading() + radians(180);
+ // let theta = this.velocity.heading() + radians(180);
   fill(127);
   stroke(200);
   push();
-  translate(this.position.x, this.position.y);
-  rotate(theta);
-  image(img, 0, 0, 20, 4);
+  translate(this.position.x + 10, this.position.y + 2);
+  rotate(this.rotation);
+  if (color_fish) {
+    image(fish_imgs[this.color], 0, 0, 20, 4);
+  } else {
+    image(img, 0, 0, 20, 4);
+  }
+  // noStroke ();
+  // fill(this.realCol);
+  // ellipse(0, 0, 20, 4);
 //   beginShape();
 //   vertex(0, -this.r * 2);
 //   vertex(-this.r, this.r * 2);
