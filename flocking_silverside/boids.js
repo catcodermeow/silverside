@@ -28,13 +28,14 @@ Flock.prototype.addBoid = function(b) {
 // Boid class
 // Methods for Separation, Cohesion, Alignment added
 
-function Boid(x, y, color) {
+function Boid(x, y, color, path) {
   this.acceleration = createVector(0, 0);
   this.velocity = createVector(0, 0);
   this.position = createVector(x, y);
   this.r = 3.0;
   this.maxspeed = 3;    // Maximum speed
   this.maxforce = 0.05; // Maximum steering force
+  this.max_path_force = 0.1;
 
   this.starting_position = createVector(x, y);
 
@@ -47,31 +48,32 @@ function Boid(x, y, color) {
   this.color = random([0, 1, 2, 2, 2, 2, 2, 3]);
 
   this.realCol = color;
+
+  this.size = random([.5, .2, .4, .8, 1]);// random([1.2, .6, .4, 1, 1]);
+
+  this.path = path;
+
+
+  this.swim_cycle = 0;
 }
 
 Boid.prototype.run = function(boids, render) {
   if (render) {
-    this.flock(boids);
+    this.applyBehaviors(boids, this.path);
     this.update();
-   // this.borders();
-   if (this.transition) {
-    this.rotation = lerp(radians(180), this.velocity.heading() + radians(180), this.counter);
+  //  // this.borders();
 
-    this.counter += 0.05;
+   this.rotation = this.velocity.heading() + radians(180);
 
-    if (this.counter > .98) {
-        this.transition = false;
-    }
-   } else {
-    this.rotation = this.velocity.heading() + radians(180);
-   }
-
-   
    this.render();
   } else {
-    this.arrive(this.starting_position);
-    this.rotation = lerp(this.rotation, radians(180), 0.02);
+    // this.arrive(this.starting_position);
+    // this.rotation = lerp(this.rotation, radians(180), 0.02);
+    this.flock(boids);
+    this.rotation = this.velocity.heading() + radians(180);
+
     this.update();
+    this.borders();
     this.render();
   } 
 }
@@ -100,6 +102,26 @@ Boid.prototype.flock = function(boids) {
   this.applyForce(sek);
 }
 
+// A function to deal with path following and separation
+Boid.prototype.applyBehaviors = function(vehicles, path) {
+  // Follow path force
+  let f = this.follow(path);
+   let ali = this.align(vehicles);  
+  // // Separate from other boids force
+   let s = this.separate(vehicles);
+
+  // Arbitrary weighting
+  f.mult(8); // 5
+   s.mult(2); // 2
+   ali.mult(1); // .5
+  // Accumulate in acceleration
+  this.applyForce(f);
+  this.applyForce(s);
+  // this.applyForce(ali);
+   this.applyForce(ali);
+   //this.applyForce(coh);
+}
+
 // Method to update location
 Boid.prototype.update = function() {
   // Update velocity
@@ -124,21 +146,109 @@ Boid.prototype.seek = function(target) {
   return steer;
 }
 
+// This function implements Craig Reynolds' path following algorithm
+  // http://www.red3d.com/cwr/steer/PathFollow.html
+Boid.prototype.follow = function(path) {
+    // Predict position 25 (arbitrary choice) frames ahead
+    let predict = this.velocity.copy();
+    predict.normalize();
+    predict.mult(10);
+    let predictpos = p5.Vector.add(this.position, predict);
+
+    // Now we must find the normal to the path from the predicted position
+    // We look at the normal for each line segment and pick out the closest one
+    let normal = null;
+    let target = null;
+    let worldRecord = 1000000; // Start with a very high worldRecord distance that can easily be beaten
+
+    // Loop through all points of the path
+    for (let i = 0; i < path.points.length; i++) {
+      // Look at a line segment
+      let a = path.points[i];
+      let b = path.points[(i + 1) % path.points.length]; // Note Path has to wraparound
+
+      // Get the normal point to that line
+      let normalPoint = getNormalPoint(predictpos, a, b);
+
+      // Check if normal is on line segment
+      let dir = p5.Vector.sub(b, a);
+      // If it's not within the line segment, consider the normal to just be the end of the line segment (point b)
+      //if (da + db > line.mag()+1) {
+      if (
+        normalPoint.x < min(a.x, b.x) ||
+        normalPoint.x > max(a.x, b.x) ||
+        normalPoint.y < min(a.y, b.y) ||
+        normalPoint.y > max(a.y, b.y)
+      ) {
+        normalPoint = b.copy();
+        // If we're at the end we really want the next line segment for looking ahead
+        a = path.points[(i + 1) % path.points.length];
+        b = path.points[(i + 2) % path.points.length]; // Path wraps around
+        dir = p5.Vector.sub(b, a);
+      }
+
+      // How far away are we from the path?
+      let d = p5.Vector.dist(predictpos, normalPoint);
+      // Did we beat the worldRecord and find the closest line segment?
+      if (d < worldRecord) {
+        worldRecord = d;
+        normal = normalPoint;
+
+        // Look at the direction of the line segment so we can seek a little bit ahead of the normal
+        dir.normalize();
+        // This is an oversimplification
+        // Should be based on distance to path & velocity
+        dir.mult(10); // 25 normally
+        target = normal.copy();
+        target.add(dir);
+      }
+    }
+
+    // // Draw the debugging stuff
+    // if (debug) {
+    //   // Draw predicted future position
+    //   stroke(0);
+    //   fill(0);
+    //   line(this.position.x, this.position.y, predictpos.x, predictpos.y);
+    //   ellipse(predictpos.x, predictpos.y, 4, 4);
+
+    //   // Draw normal position
+    //   stroke(0);
+    //   fill(0);
+    //   ellipse(normal.x, normal.y, 4, 4);
+    //   // Draw actual target (red if steering towards it)
+    //   line(predictpos.x, predictpos.y, target.x, target.y);
+    //   if (worldRecord > path.radius) fill(255, 0, 0);
+    //   noStroke();
+    //   ellipse(target.x, target.y, 8, 8);
+    // }
+
+    // Only if the distance is greater than the path's radius do we bother to steer
+    if (worldRecord > path.radius) {
+      return this.seek(target);
+    } else {
+      return createVector(0, 0);
+    }
+}
+
 Boid.prototype.render = function() {
   // Draw a triangle rotated in the direction of velocity
  // let theta = this.velocity.heading() + radians(180);
   fill(127);
   stroke(200);
   push();
-  translate(this.position.x + 10, this.position.y + 2);
+  translate(this.position.x + 10, this.position.y + 10);
   rotate(this.rotation);
   if (color_fish) {
-    image(fish_imgs[this.color], 0, 0, 20, 4);
+    image(fish_imgs[this.color], 0, 0, 20 * this.size, 4 * this.size);
   } else {
-    image(img, 0, 0, 20, 4);
+    image(fish_swim[this.swim_cycle], 0, 0, 20 * this.size, 20 * this.size);
+    if (frameCount % 8 == 0) {
+      this.swim_cycle = (this.swim_cycle + 1) % 7;
+    }
   }
   // noStroke ();
-  // fill(this.realCol);
+  // fill(getColor(this.position.x, this.position.y));
   // ellipse(0, 0, 20, 4);
 //   beginShape();
 //   vertex(0, -this.r * 2);
@@ -257,3 +367,16 @@ Boid.prototype.arrive = function(target) {
 }
 
 
+// A function to get the normal point from a point (p) to a line segment (a-b)
+// This function could be optimized to make fewer new Vector objects
+function getNormalPoint(p, a, b) {
+  // Vector from a to p
+  let ap = p5.Vector.sub(p, a);
+  // Vector from a to b
+  let ab = p5.Vector.sub(b, a);
+  ab.normalize(); // Normalize the line
+  // Project vector "diff" onto line by using the dot product
+  ab.mult(ap.dot(ab));
+  let normalPoint = p5.Vector.add(a, ab);
+  return normalPoint;
+}
